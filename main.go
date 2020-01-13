@@ -101,6 +101,7 @@ func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, ale
 	var withComponentID bool
 	var cachetComponent cachet.Component
 	var name string
+	var incidentUpdateMessage string
 	var message string
 	var err error
 
@@ -113,26 +114,36 @@ func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, ale
 
 	if alertAnnotations["cachet_incident_message"] == "" {
 		message = alertAnnotations["summary"]
+		if message == "" {
+			message = name
+		}
 	} else {
 		message = alertAnnotations["cachet_incident_message"]
 	}
 	level.Debug(logger).Log("msg", "Set incident message to="+message)
 
+	if alertAnnotations["cachet_incident_update_message"] == "" {
+		incidentUpdateMessage = "Resolved"
+	} else {
+		incidentUpdateMessage = alertAnnotations["cachet_incident_update_message"]
+	}
+	level.Debug(logger).Log("msg", "Set incident update message to="+incidentUpdateMessage)
+
 	if alertLabels["cachet_component_name"] != "" {
 		level.Debug(logger).Log("msg", "cachet_component_name label is set, looking for corresponding component ID")
 		withComponentID, cachetComponent, err = alt.searchCachetComponentID(alertLabels)
 		if err != nil {
-			level.Warn(logger).Log("msg", "Error looking for corresponding component ID: "+err.Error())
+			level.Warn(logger).Log("msg", "Error looking for corresponding component ID. "+err.Error()+". Updating component status will be skipped.")
 		}
 
 		if withComponentID {
 			componentID = cachetComponent.ID
 			level.Debug(logger).Log("msg", "Found component ID="+strconv.Itoa(componentID)+" for alert="+alertLabels["alertname"])
 		} else {
-			level.Debug(logger).Log("msg", "Did not find component ID for alert=", alertLabels["alertname"])
+			level.Debug(logger).Log("msg", "Did not find component ID for alert="+alertLabels["alertname"]+". Updating component status will be skipped.")
 		}
 	} else {
-		level.Debug(logger).Log("msg", "cachet_component_name label is not set")
+		level.Debug(logger).Log("msg", "cachet_component_name label is not set. Updating component status will be skipped.")
 	}
 
 	if _, ok := alt.incidents[name]; ok {
@@ -142,8 +153,8 @@ func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, ale
 			incidentUpdate := &cachet.IncidentUpdate{
 				IncidentID:  alt.incidents[name].ID,
 				Status:      4,
-				HumanStatus: "Fixed",
-				Message:     "Fixed! Sorry for the inconvenience!",
+				HumanStatus: "Resolved",
+				Message:     incidentUpdateMessage,
 			}
 
 			level.Debug(logger).Log("msg", "Creating incident update with input="+fmt.Sprintf("%v", incidentUpdate))
@@ -283,14 +294,16 @@ func main() {
 
 	logger = logging.NewLogfmtLogger(os.Stderr)
 
-	switch logLevel := os.Getenv("LOG_LEVEL"); logLevel {
-	case "debug":
+	logLevel := os.Getenv("LOG_LEVEL")
+
+	switch strings.ToUpper(logLevel) {
+	case "DEBUG":
 		logger = level.NewFilter(logger, level.AllowDebug())
-	case "info":
+	case "INFO":
 		logger = level.NewFilter(logger, level.AllowInfo())
-	case "warn":
+	case "WARN":
 		logger = level.NewFilter(logger, level.AllowWarn())
-	case "error":
+	case "ERROR":
 		logger = level.NewFilter(logger, level.AllowError())
 	default:
 		logger = level.NewFilter(logger, level.AllowInfo())
