@@ -1,21 +1,22 @@
 # Building
 # --------
-FROM golang:1.11-alpine as builder
-MAINTAINER gregdhill <greg.hill@monax.io>
+FROM golang:1.13-alpine as builder
 
-ARG REPO=$GOPATH/src/github.com/gregdhill/bridge
+ARG REPO=$GOPATH/src/github.com/dbluxo/prometheus-cachet
+
 COPY . $REPO
 WORKDIR $REPO
 
-RUN go build --ldflags '-extldflags "-static"' -o bin/bridge
+RUN go build --ldflags '-extldflags "-static"' -o bin/prometheus-cachet-bridge
 
 # Deployment
 # ----------
 FROM alpine:3.8
 
-ARG REPO=/go/src/github.com/gregdhill/bridge
+ARG REPO=/go/src/github.com/dbluxo/prometheus-cachet
+
 COPY --from=builder $REPO/bin/* /usr/local/bin/
 
 RUN apk add --no-cache ca-certificates
 
-ENTRYPOINT [ "bridge" ]
+ENTRYPOINT [ "prometheus-cachet-bridge" ]

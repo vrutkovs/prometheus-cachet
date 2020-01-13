@@ -1,28 +1,23 @@
-name: Go
+name: build prometheus-cachet-bridge
+
 on: [push]
+
 jobs:
 
-  build:
+  build_docker_image:
     name: Build
     runs-on: ubuntu-latest
     steps:
 
-    - name: Set up Go 1.13
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.13
-      id: go
+    - uses: actions/checkout@v1
 
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v1
+    - name: Build and tag image
+      run: docker build -t "docker.pkg.github.com/dbluxo/prometheus-cachet-bridge:latest" -f Dockerfile .
 
-    - name: Get dependencies
-      run: |
-        go get -v -t -d ./...
-        if [ -f Gopkg.toml ]; then
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure
-        fi
+    - name: Docker login
+      run: docker login docker.pkg.github.com -u $GITHUB_ACTOR -p $GITHUB_TOKEN
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
-    - name: Build
-      run: go build -v .
+    - name: Publish to GPR
+      run: docker push "docker.pkg.github.com/dbluxo/prometheus-cachet-bridge:latest"
