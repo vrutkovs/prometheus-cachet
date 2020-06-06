@@ -1,23 +1,15 @@
-name: build prometheus-cachet-bridge
-
-on: [push]
-
+name: build-and-publish
+on: [push, pull_request]
 jobs:
-
-  build_docker_image:
-    name: Build
+  build:
     runs-on: ubuntu-latest
     steps:
-
     - uses: actions/checkout@v1
-
-    - name: Build and tag image
+    - name: build-and-tag
       run: docker build -t "docker.pkg.github.com/dbluxo/prometheus-cachet/prometheus-cachet:latest" -f Dockerfile .
-
-    - name: Docker login
+    - name: docker-login
       run: docker login docker.pkg.github.com -u $GITHUB_ACTOR -p $GITHUB_TOKEN
       env:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
-    - name: Publish to GPR
+    - name: publish-to-gpr
       run: docker push "docker.pkg.github.com/dbluxo/prometheus-cachet/prometheus-cachet:latest"
