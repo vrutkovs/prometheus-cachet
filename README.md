@@ -1,5 +1,7 @@
 # [Prometheus Alerts](https://prometheus.io/docs/alerting/alertmanager/) to [Cachet](http://cachethq.io/)
 
+![](https://github.com/dbluxo/prometheus-cachet/workflows/build-and-publish/badge.svg)
+
 Small go based microservice to receive Prometheus Alertmanager triggers and update corresponding incidents/components in Cachet. This requires Cachet 2.4.
 
 ## Dependencies
