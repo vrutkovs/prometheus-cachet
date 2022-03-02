@@ -1,3 +1,5 @@
+ :warning: The project has been archived and is no longer maintained!
+
 # [Prometheus Alerts](https://prometheus.io/docs/alerting/alertmanager/) to [Cachet](http://cachethq.io/)
 
 ![](https://github.com/dbluxo/prometheus-cachet/workflows/build-and-publish/badge.svg)
