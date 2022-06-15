@@ -23,73 +23,40 @@ type alerts struct {
 	mutex     sync.Mutex
 }
 
+const componentGroup = "Clusters"
+
 var logger logging.Logger
+var componentFromEnv string
 
-func (alt *alerts) searchCachetComponentID(alertLabels map[string]string) (bool, cachet.Component, error) {
+func (alt *alerts) searchCachetComponentID() (bool, cachet.Component, error) {
 	emptyItem := cachet.Component{}
-	cachetComponentGroupName := alertLabels["cachet_component_group_name"]
-	cachetComponentName := alertLabels["cachet_component_name"]
+	filter := &cachet.ComponentGroupsQueryParams{
+		Name: componentGroup,
+	}
 
-	if cachetComponentGroupName != "" {
-		level.Debug(logger).Log("msg", "cachet_component_group_name label is set to="+cachetComponentGroupName)
+	level.Debug(logger).Log("msg", "Searching for all component groups with name="+componentGroup)
+	groupResponse, response, err := alt.client.ComponentGroups.GetAll(filter)
+	if err != nil {
+		level.Error(logger).Log("msg", "Error searching component groups: "+err.Error(), "response", response)
+		return false, emptyItem, err
+	}
 
-		filter := &cachet.ComponentGroupsQueryParams{
-			Name: cachetComponentGroupName,
-		}
-
-		level.Debug(logger).Log("msg", "Searching for all component groups with name="+cachetComponentGroupName)
-		groupResponse, response, err := alt.client.ComponentGroups.GetAll(filter)
-		if err != nil {
-			level.Error(logger).Log("msg", "Error searching component groups: "+err.Error(), "response", response)
-			return false, emptyItem, err
-		}
-
-		if groupResponse.Meta.Pagination.Count == 0 {
-			return false, emptyItem, errors.New("Did not find group with name=" + cachetComponentGroupName)
-		} else if groupResponse.Meta.Pagination.Count > 1 {
-			return false, emptyItem, errors.New("Did find more than one group with name=" + cachetComponentGroupName)
-		} else {
-			level.Debug(logger).Log("msg", "Did find one group with name="+cachetComponentGroupName)
-		}
-
-		for _, v := range groupResponse.ComponentGroups {
-			for _, j := range v.EnabledComponents {
-				if j.Name == cachetComponentName {
-					return true, j, nil
-				}
-				// TODO: check if more than one component will be found
-			}
-		}
+	if groupResponse.Meta.Pagination.Count == 0 {
+		return false, emptyItem, errors.New("Did not find group with name=" + componentGroup)
+	} else if groupResponse.Meta.Pagination.Count > 1 {
+		return false, emptyItem, errors.New("Did find more than one group with name=" + componentGroup)
 	} else {
-		level.Debug(logger).Log("msg", "cachet_component_group_name label is not set")
+		level.Debug(logger).Log("msg", "Did find one group with name="+componentGroup)
+	}
 
-		filter := &cachet.ComponentsQueryParams{
-			Name: cachetComponentName,
-		}
-
-		level.Debug(logger).Log("msg", "Searching for all components with name="+cachetComponentName)
-		componentResponse, response, err := alt.client.Components.GetAll(filter)
-		if err != nil {
-			level.Error(logger).Log("msg", "Error searching components: "+err.Error(), "response", response)
-			return false, emptyItem, err
-		}
-
-		if componentResponse.Meta.Pagination.Count == 0 {
-			return false, emptyItem, errors.New("Did not find components with name=" + cachetComponentName)
-		} else if componentResponse.Meta.Pagination.Count > 1 {
-			return false, emptyItem, errors.New("Did find more than one component with name=" + cachetComponentName)
-		} else {
-			level.Debug(logger).Log("msg", "Did find one component with name="+cachetComponentName)
-		}
-
-		for _, v := range componentResponse.Components {
-			if v.Name == cachetComponentName {
-				return true, v, nil
+	for _, v := range groupResponse.ComponentGroups {
+		for _, j := range v.EnabledComponents {
+			if j.Name == componentFromEnv {
+				return true, j, nil
 			}
 			// TODO: check if more than one component will be found
 		}
 	}
-
 	return false, emptyItem, errors.New("Did not found component")
 }
 
@@ -129,21 +96,16 @@ func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, ale
 	}
 	level.Debug(logger).Log("msg", "Set incident update message to="+incidentUpdateMessage)
 
-	if alertLabels["cachet_component_name"] != "" {
-		level.Debug(logger).Log("msg", "cachet_component_name label is set, looking for corresponding component ID")
-		withComponentID, cachetComponent, err = alt.searchCachetComponentID(alertLabels)
-		if err != nil {
-			level.Warn(logger).Log("msg", "Error looking for corresponding component ID. "+err.Error()+". Updating component status will be skipped.")
-		}
+	withComponentID, cachetComponent, err = alt.searchCachetComponentID()
+	if err != nil {
+		level.Warn(logger).Log("msg", "Error looking for corresponding component ID. "+err.Error()+". Updating component status will be skipped.")
+	}
 
-		if withComponentID {
-			componentID = cachetComponent.ID
-			level.Debug(logger).Log("msg", "Found component ID="+strconv.Itoa(componentID)+" for alert="+alertLabels["alertname"])
-		} else {
-			level.Debug(logger).Log("msg", "Did not find component ID for alert="+alertLabels["alertname"]+". Updating component status will be skipped.")
-		}
+	if withComponentID {
+		componentID = cachetComponent.ID
+		level.Debug(logger).Log("msg", "Found component ID="+strconv.Itoa(componentID)+" for alert="+alertLabels["alertname"])
 	} else {
-		level.Debug(logger).Log("msg", "cachet_component_name label is not set. Updating component status will be skipped.")
+		level.Debug(logger).Log("msg", "Did not find component ID for alert="+alertLabels["alertname"]+". Updating component status will be skipped.")
 	}
 
 	if _, ok := alt.incidents[name]; ok {
@@ -327,6 +289,11 @@ func main() {
 	}
 	client.Authentication.SetTokenAuth(apiKey)
 	// client.Authentication.SetBasicAuth("test@example.com", "test123")
+
+	componentFromEnv = os.Getenv("CACHET_CLUSTER_NAME")
+	if len(apiKey) == 0 {
+		componentFromEnv = "local-cluster"
+	}
 
 	alerts := alerts{incidents: make(map[string]*cachet.Incident), client: client}
 	http.HandleFunc("/health", health)
