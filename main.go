@@ -81,6 +81,15 @@ func (alt *alerts) cachetAlert(component, componentGroup, status string, alertLa
 		if message == "" {
 			message = name
 		}
+		description := alertAnnotations["description"]
+		if description != "" {
+			message += "\n\n*" + description + "*\n"
+		}
+		// List alert labels
+		message += "\n----\nLabels:\n"
+		for key, value := range alertLabels {
+			message += " * " + key + ": " + value + "\n"
+		}
 	} else {
 		message = alertAnnotations["cachet_incident_message"]
 	}
