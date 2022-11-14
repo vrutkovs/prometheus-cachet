@@ -191,16 +191,16 @@ func (alt *alerts) cachetAlert(component, componentGroup, status string, alertLa
 		actualComponentStatus := component.Status
 		incident.ComponentID = component.ID
 
-		if cachetComponentStatus := alertLabels["cachet_component_status"]; cachetComponentStatus == "" && actualComponentStatus < 4 {
-			level.Debug(logger).Log("msg", "Label cachet_component_status is not set in alert labels")
-			level.Debug(logger).Log("msg", "Setting incidents component status variable to 4 (Major Outage), because actual component status is="+strconv.Itoa(actualComponentStatus)+" lower")
-			incident.ComponentStatus = 4
-		} else {
-			level.Debug(logger).Log("msg", "Label cachet_component_status is set in alert labels to="+cachetComponentStatus)
-			desiredComponentStatus, err := strconv.Atoi(cachetComponentStatus)
-			if err != nil {
-				level.Error(logger).Log("msg", "Error converting component status from ascii to integer:"+err.Error())
-				return
+		if alertSeverity := alertLabels["severity"]; alertSeverity != "" {
+			level.Debug(logger).Log("msg", "Label severity is set to="+alertSeverity)
+			var desiredComponentStatus int
+			switch alertSeverity {
+			case "critical":
+				desiredComponentStatus = cachet.ComponentStatusPartialOutage
+			case "warning":
+				desiredComponentStatus = cachet.ComponentStatusPerformanceIssues
+			default:
+				desiredComponentStatus = cachet.ComponentStatusPerformanceIssues
 			}
 			if desiredComponentStatus > actualComponentStatus {
 				level.Debug(logger).Log("msg", "Setting incidents component status to="+strconv.Itoa(desiredComponentStatus)+" ,because actual component status="+strconv.Itoa(actualComponentStatus)+"is lower")
