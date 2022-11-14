@@ -23,12 +23,9 @@ type alerts struct {
 	mutex     sync.Mutex
 }
 
-const componentGroup = "Clusters"
-
 var logger logging.Logger
-var componentFromEnv string
 
-func (alt *alerts) searchCachetComponentID() (bool, cachet.Component, error) {
+func (alt *alerts) searchCachetComponentID(component, componentGroup string) (bool, cachet.Component, error) {
 	emptyItem := cachet.Component{}
 	filter := &cachet.ComponentGroupsQueryParams{
 		Name: componentGroup,
@@ -51,7 +48,7 @@ func (alt *alerts) searchCachetComponentID() (bool, cachet.Component, error) {
 
 	for _, v := range groupResponse.ComponentGroups {
 		for _, j := range v.EnabledComponents {
-			if j.Name == componentFromEnv {
+			if j.Name == component {
 				return true, j, nil
 			}
 			// TODO: check if more than one component will be found
@@ -60,7 +57,7 @@ func (alt *alerts) searchCachetComponentID() (bool, cachet.Component, error) {
 	return false, emptyItem, errors.New("Did not found component")
 }
 
-func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, alertAnnotations map[string]string) {
+func (alt *alerts) cachetAlert(component, componentGroup, status string, alertLabels map[string]string, alertAnnotations map[string]string) {
 
 	level.Debug(logger).Log("msg", "Processing alert="+alertLabels["alertname"])
 
@@ -96,7 +93,7 @@ func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, ale
 	}
 	level.Debug(logger).Log("msg", "Set incident update message to="+incidentUpdateMessage)
 
-	withComponentID, cachetComponent, err = alt.searchCachetComponentID()
+	withComponentID, cachetComponent, err = alt.searchCachetComponentID(component, componentGroup)
 	if err != nil {
 		level.Warn(logger).Log("msg", "Error looking for corresponding component ID. "+err.Error()+". Updating component status will be skipped.")
 	}
@@ -235,6 +232,8 @@ func (alt *alerts) cachetAlert(status string, alertLabels map[string]string, ale
 func (alt *alerts) prometheusAlert(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	level.Info(logger).Log("msg", "Receiving alert...")
+	component := r.URL.Query().Get("component")
+	componentGroup := r.URL.Query().Get("componentGroup")
 	data := template.Data{}
 	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
 		level.Error(logger).Log("msg", "Error decoding alert: "+err.Error(), "body", r.Body)
@@ -244,7 +243,7 @@ func (alt *alerts) prometheusAlert(w http.ResponseWriter, r *http.Request) {
 	level.Debug(logger).Log("msg", "Alerts status:"+data.Status)
 	for _, alert := range data.Alerts {
 		level.Debug(logger).Log("msg", "Alert: status="+alert.Status+" labels="+fmt.Sprintf("%v", alert.Labels)+" annotations="+fmt.Sprintf("%v", alert.Annotations))
-		alt.cachetAlert(status, alert.Labels, alert.Annotations)
+		alt.cachetAlert(component, componentGroup, status, alert.Labels, alert.Annotations)
 	}
 }
 
@@ -289,11 +288,6 @@ func main() {
 	}
 	client.Authentication.SetTokenAuth(apiKey)
 	// client.Authentication.SetBasicAuth("test@example.com", "test123")
-
-	componentFromEnv = os.Getenv("CACHET_CLUSTER_NAME")
-	if len(apiKey) == 0 {
-		componentFromEnv = "local-cluster"
-	}
 
 	alerts := alerts{incidents: make(map[string]*cachet.Incident), client: client}
 	http.HandleFunc("/health", health)
