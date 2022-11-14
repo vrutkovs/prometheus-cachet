@@ -110,10 +110,9 @@ func (alt *alerts) cachetAlert(component, componentGroup, status string, alertLa
 			level.Info(logger).Log("msg", "Resolving alert="+name)
 
 			incidentUpdate := &cachet.IncidentUpdate{
-				IncidentID:  alt.incidents[name].ID,
-				Status:      4,
-				HumanStatus: "Resolved",
-				Message:     incidentUpdateMessage,
+				IncidentID: alt.incidents[name].ID,
+				Status:     4,
+				Message:    incidentUpdateMessage,
 			}
 
 			level.Debug(logger).Log("msg", "Creating incident update with input="+fmt.Sprintf("%v", incidentUpdate))
